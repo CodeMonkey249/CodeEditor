@@ -6,11 +6,16 @@
 #include <termios.h>
 #include <unistd.h>
 
+/*** defines ***/
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 /*** data ***/
 struct termios orig_termios;
 
 /*** terminal ***/
 void die(const char *s) {
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
     perror(s);
     exit(1);
 }
@@ -53,22 +58,43 @@ void enableRawMode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+char editorReadKey(void) {
+    int code = 0;
+    char c;
+    while (code != 1) {
+        code = read(STDIN_FILENO, &c, 1);
+        if (code == -1) die("read");
+    }
+    return c;
+}
+
+/*** output ***/
+void editorRefreshScreen(void) {
+    // ANSI Escape Codes
+    // https://vt100.net/docs/vt100-ug/chapter3.html
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
+}
+
+/*** input ***/
+void editorProcessKeypress(void) {
+    char c = editorReadKey();
+    switch(c) {
+        case CTRL_KEY('q'):
+            write(STDOUT_FILENO, "\x1b[2J", 4);
+            write(STDOUT_FILENO, "\x1b[H", 3);
+            exit(0);
+            break;
+    }
+}
+
 /*** init ***/
 int main(void) {
     enableRawMode();
 
     while (1) {
-        char c = '\0';
-	    int code = read(STDIN_FILENO, &c, 1);
-        if (code == -1 && errno != EAGAIN) die("read");
-        if (iscntrl(c)) {
-            printf("%d\n", c);
-        } else if (c != 'q') {
-            printf("%d (%c)\n", c, c);
-        }
-        if (c == 'q') {
-            break;
-        }
+        editorRefreshScreen();
+        editorProcessKeypress();
     }
 	return 0;
 }
