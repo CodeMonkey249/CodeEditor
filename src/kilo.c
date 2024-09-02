@@ -37,7 +37,9 @@ typedef struct erow {
 struct editorConfig {
     int cx;
     int cy;
-    erow row;
+    erow *row;
+    int rowoff;
+    int coloff;
     int numrows;
     int screenrows;
     int screencols;
@@ -176,6 +178,17 @@ int getWindowSize(int *rows, int *cols) {
     }
 }
 
+/*** row operations ***/
+void editorAppendRow(char *s, size_t len) {
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+
+    E.row[E.numrows].size = len;
+    E.row[E.numrows].chars = malloc(len + 1);
+    memcpy(E.row[E.numrows].chars, s, len);
+    E.row[E.numrows].chars[len] = '\0';
+    E.numrows++;
+}
+
 /*** file i/o ***/
 void editorOpen(char *filename) {
     FILE * fp = fopen(filename, "r");
@@ -188,11 +201,7 @@ void editorOpen(char *filename) {
         while (linelen > 0 && (line[linelen - 1] == '\n' ||
                     line[linelen - 1] == '\r'))
             linelen--;
-        E.row.chars = malloc(linelen + 1);
-        memcpy(E.row.chars, line, linelen);
-        E.row.size = linelen;
-        E.row.chars[linelen] = '\0';
-        E.numrows++;
+        editorAppendRow(line, linelen);
     }
     free(line);
     fclose(fp);
@@ -220,11 +229,28 @@ void abFree(struct abuf *ab) {
 }
 
 /*** output ***/
+void editorScroll(void) {
+    if (E.cx < E.coloff) {
+        E.coloff = E.cx;
+    }
+    if (E.cx >= E.coloff + E.screencols) {
+        E.coloff = E.cx - E.screencols + 1;
+    }
+    if (E.cy < E.rowoff) {
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
+
 void editorDrawRows(struct abuf *ab) {
     for (int y = 0; y < E.screenrows; y++) {
         // Clear this row
-        // Display upper third welcome message
-        if (y >= E.numrows) {
+        int filerow = y + E.rowoff;
+        if (filerow >= E.numrows) {
+            // Display upper third welcome message
             if (E.numrows == 0 && y == E.screenrows / 3) {
                 char welcome[80];
                 int len = snprintf(welcome, sizeof(welcome),
@@ -241,11 +267,12 @@ void editorDrawRows(struct abuf *ab) {
                 abAppend(ab, "~", 1);
             }
         } else {
-            int len = E.row.size;
+            int len = E.row[filerow].size - E.coloff;
+            if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row.chars, len);
+            abAppend(ab, &E.row[filerow].chars[E.coloff], len);
         }
-        
+
         abAppend(ab, "\x1b[K", 4);
         if (y < E.screenrows - 1) {
             abAppend(ab, "\r\n", 2);
@@ -254,6 +281,7 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorRefreshScreen(void) {
+    editorScroll();
     // ANSI Escape Codes
     // https://vt100.net/docs/vt100-ug/chapter3.html
     struct abuf ab = ABUF_INIT;
@@ -264,7 +292,8 @@ void editorRefreshScreen(void) {
     editorDrawRows(&ab);
     // Position cursor
     char pos[30];
-    int len = snprintf(pos, sizeof(pos), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    int len = snprintf(pos, sizeof(pos), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
+                                                        (E.cx - E.coloff) + 1);
     abAppend(&ab, pos, len);
     // Reveal cursor
     abAppend(&ab, "\x1b[?25h", 6);
@@ -276,20 +305,44 @@ void editorRefreshScreen(void) {
 /*** input ***/
 
 void editorMoveCursor(int key) {
+    // Get current row if it exists
+    erow *row = NULL;
+    if (E.cy < E.numrows) row = &E.row[E.cy];
+
     switch(key) {
         case ARROW_UP:
             if (E.cy > 0) E.cy--;
             break;
         case ARROW_LEFT:
-            if (E.cx > 0) E.cx--;
+            if (E.cx > 0) {
+                E.cx--;
+            } else if (E.cy > 0) {
+                E.cy--;
+                E.cx = E.row[E.cy].size - 1;
+            }
             break;
         case ARROW_DOWN:
-            if (E.cy < E.screenrows - 1) E.cy++;
+            if (E.cy < (E.numrows - 1)) {
+                E.cy++;
+            }
             break;
         case ARROW_RIGHT:
-            if (E.cx < E.screencols - 1) E.cx++;
+            if (row && E.cx < row->size - 1) {
+                E.cx++;
+            } else if (row && E.cy < E.numrows - 1) {
+                E.cy++;
+                E.cx = 0;
+            }
             break;
     }
+
+    // Snap cursor to end of line
+    row = NULL;
+    if (E.cy < E.numrows) row = &E.row[E.cy];
+    if (row && E.cx >= row->size) {
+        E.cx = row->size - 1;
+    }
+    if (E.cx < 0) E.cx = 0;
 }
 
 void editorProcessKeypress(void) {
@@ -301,7 +354,7 @@ void editorProcessKeypress(void) {
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
             break;
-        // Navigation mapping
+            // Navigation mapping
         case ARROW_UP:
         case ARROW_LEFT:
         case ARROW_DOWN:
@@ -324,8 +377,17 @@ void editorProcessKeypress(void) {
             E.cx = 0;
             break;
         case END_KEY:
-            E.cx = E.screencols - 1;
-            break;
+            {
+                // Get current row if it exists
+                erow *row = NULL;
+                if (E.cy < E.numrows) row = &E.row[E.cy];
+                if (row) {
+                    E.cx = row->size - 1;
+                } else {
+                    E.cx = 0;
+                }
+                break;
+            }
         case DELETE_KEY:
             E.cx = 0;
             break;
@@ -338,6 +400,9 @@ void initEditor(void) {
     /* Initialize the E struct */
     E.cx = 0;
     E.cy = 0;
+    E.rowoff = 0;
+    E.coloff = 0;
+    E.row = NULL;
     int code = getWindowSize(&E.screenrows, &E.screencols);
     if (code == -1) die("getWindowSize");
 }
