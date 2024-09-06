@@ -483,7 +483,7 @@ void editorMoveCursor(int key) {
                 E.cx--;
             } else if (E.cy > 0) {
                 E.cy--;
-                E.cx = E.row[E.cy].size - 1;
+                E.cx = E.row[E.cy].size;
             }
             break;
         case ARROW_DOWN:
@@ -492,7 +492,7 @@ void editorMoveCursor(int key) {
             }
             break;
         case ARROW_RIGHT:
-            if (row && E.cx < row->size - 1) {
+            if (row && E.cx < row->size) {
                 E.cx++;
             } else if (row && E.cy < E.numrows - 1) {
                 E.cy++;
@@ -505,7 +505,7 @@ void editorMoveCursor(int key) {
     row = NULL;
     if (E.cy < E.numrows) row = &E.row[E.cy];
     if (row && E.cx >= row->size) {
-        E.cx = row->size - 1;
+        E.cx = row->size;
     }
     if (E.cx < 0) E.cx = 0;
 }
@@ -570,7 +570,7 @@ void editorProcessKeypress(void) {
             {
                 // Get current row if it exists
                 if (E.cy < E.numrows)
-                    E.cx = E.row[E.cy].size - 1;
+                    E.cx = E.row[E.cy].size;
                 break;
             }
         case CTRL_KEY('s'):
