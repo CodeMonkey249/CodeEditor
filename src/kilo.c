@@ -3,14 +3,17 @@
 #define _BSD_SOURCE
 #define _GNU_SOURCE
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /*** defines ***/
@@ -44,6 +47,7 @@ struct editorConfig {
     int cy;
     int rx;
     erow *row;
+    int dirty;
     char *filename;
     char statusMessage[80];
     int rowoff;
@@ -51,10 +55,14 @@ struct editorConfig {
     int numrows;
     int screenrows;
     int screencols;
+    time_t statusmsg_time;
     struct termios orig_termios;
 };
 
 struct editorConfig E;
+
+/*** prototypes ***/
+void editorSetStatusMessage(const char *fmt, ...);
 
 /*** terminal ***/
 void die(const char *s) {
@@ -239,6 +247,7 @@ void editorAppendRow(char *s, size_t len) {
     editorUpdateRow(&E.row[E.numrows]);
 
     E.numrows++;
+    E.dirty++;
 }
 
 void editorRowInsertChar(erow *row, int at, int c) {
@@ -247,6 +256,7 @@ void editorRowInsertChar(erow *row, int at, int c) {
     row->size++;
     row->chars[at] = c;
     editorUpdateRow(row);
+    E.dirty++;
 }
 
 /*** editor operations ***/
@@ -292,6 +302,7 @@ void editorOpen(char *filename) {
     }
     free(line);
     fclose(fp);
+    E.dirty = 0;
 }
 
 void editorSave(void) {
@@ -299,10 +310,20 @@ void editorSave(void) {
     int len;
     char *s = editorRowsToString(&len);
     int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
-    ftruncate(fd, len);
-    write(fd, s, len);
+    if (fd != -1) {
+        if (ftruncate(fd, len) != -1) {
+            if (write(fd, s, len) == len) {
+                close(fd);
+                free(s);
+                E.dirty = 0;
+                editorSetStatusMessage("%d bytes written to disk", len);
+                return;
+            }
+        }
+        close(fd);
+    }
     free(s);
-    close(fd);
+    editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }
 
 /*** append buffer ***/
@@ -387,8 +408,9 @@ void editorDrawStatusBar(struct abuf *ab) {
     char status[80];
     char fileloc[80];
     // Display filename if there is one
-    int len = snprintf(status, sizeof(status), "%.20s - %d lines",
-            E.filename ? E.filename : "[No Name]", E.numrows);
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
+            E.filename ? E.filename : "[No Name]", E.numrows,
+            E.dirty ? "(modified)" : "");
     int fileloclen = snprintf(fileloc, sizeof(fileloc), "%d,%d",
             E.cy + 1, E.cx + 1);
     if (len > E.screencols) len = E.screencols;
@@ -438,8 +460,12 @@ void editorRefreshScreen(void) {
     abFree(&ab);
 }
 
-void editorSetStatusMessage(char *s) {
-    strcpy(E.statusMessage, s);
+void editorSetStatusMessage(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(E.statusMessage, sizeof(E.statusMessage), fmt, ap);
+    va_end(ap);
+    E.statusmsg_time = time(NULL);
 }
 /*** input ***/
 
@@ -485,10 +511,17 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress(void) {
+    static int quit_confirm = 1;
     int c = editorReadKey();
     switch(c) {
         // Quit on CTRL-q
         case CTRL_KEY('q'):
+            if (E.dirty && quit_confirm == 1) {
+                editorSetStatusMessage("File has unsaved changes. "
+                        "Press CTRL-Q again to quit, or press CTRL-S to save.");
+                quit_confirm--;
+                return;
+            }
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
@@ -550,6 +583,7 @@ void editorProcessKeypress(void) {
             editorInsertChar(c);
             break;
     }
+    quit_confirm = 1;
 }
 
 /*** init ***/
@@ -562,8 +596,10 @@ void initEditor(void) {
     E.rowoff = 0;
     E.coloff = 0;
     E.row = NULL;
+    E.dirty = 0;
     E.filename = NULL;
     E.statusMessage[0] = '\0';
+    E.statusmsg_time = 0;
     int code = getWindowSize(&E.screenrows, &E.screencols);
     if (code == -1) die("getWindowSize");
     E.screenrows -= 2;
@@ -576,7 +612,7 @@ int main(int argc, char *argv[]) {
         editorOpen(argv[1]);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-Q = quit\0");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit\0");
 
     while (1) {
         editorRefreshScreen();
