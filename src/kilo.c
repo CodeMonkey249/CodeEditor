@@ -16,7 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
-/*** defines ***/
+/*** defines ***/ 
 #define KILO_TAB_STOP 8
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -37,6 +37,7 @@ enum {
 enum editorHighlight {
     HL_NORMAL = 0,
     HL_COMMENT,
+    HL_KEYWORD,
     HL_STRING,
     HL_NUMBER,
     HL_MATCH,
@@ -46,10 +47,10 @@ enum editorHighlight {
 #define HL_HIGHTLIGHT_STRINGS (1<<1)
 
 /*** data ***/
-
 struct editorSyntax {
     char *filetype;
     char **filematch;
+    char **keywords;
     char *singleline_comment_start;
     int flags;
 };
@@ -84,11 +85,19 @@ struct editorConfig E;
 
 /*** filetypes ***/
 char *C_HL_EXTENSIONS[] = {".c", ".cpp", ".h", NULL};
+char *C_HL_KEYWORDS[] = {
+    "auto", "break", "case", "char", "const", "continue", "default", "do",
+    "double", "else", "enum", "extern", "float", "for", "goto", "if", 
+    "int", "long", "register", "return", "short", "signed", "sizeof", "static",
+    "struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while", NULL
+};
+
 
 struct editorSyntax HLDB[] = {
     {
         "c",
         C_HL_EXTENSIONS,
+        C_HL_KEYWORDS,
         "//",
         HL_HIGHLIGHT_NUMBERS | HL_HIGHTLIGHT_STRINGS,
     },
@@ -242,10 +251,15 @@ void editorUpdateSyntax(erow *row) {
     int i = 0;
     unsigned char prev_hl = HL_NORMAL;
     char prev_char = '\0';
+
     int in_string = 0;
     int in_singleline_comment = 0;
+
     char *scs = E.syntax->singleline_comment_start;
     int scs_len = scs ? strlen(scs) : 0;
+
+    char **keywords = E.syntax->keywords;
+
     while(i < row->rsize) {
         if (i != 0) {
             prev_hl = row->hl[i-1];
@@ -262,6 +276,7 @@ void editorUpdateSyntax(erow *row) {
                 in_singleline_comment = 1;
                 row->hl[i] = HL_COMMENT;
                 row->hl[i+1] = HL_COMMENT;
+                prev_char = row->hl[i+1];
                 i += 2;
                 continue;
         }
@@ -270,13 +285,14 @@ void editorUpdateSyntax(erow *row) {
         if (E.syntax->flags & HL_HIGHTLIGHT_STRINGS) {
             if (in_string) {
                 row->hl[i] = HL_STRING;
-                prev_char = c;
                 if (c == '\\' && i + 1 < row->size) {
                     row->hl[i+1] = HL_STRING;
+                    prev_char = row->hl[i+1];
                     i += 2;
                     continue;
                 }
                 if (c == in_string) in_string = 0;
+                prev_char = c;
                 i++;
                 continue;
             } else {
@@ -300,7 +316,22 @@ void editorUpdateSyntax(erow *row) {
                 continue;
             }
         }
-        /** Strings **/
+
+        /** keywords **/
+        if (is_separator(prev_char)) {
+            int j;
+            for (j = 0; keywords[j]; j++) {
+                char *keyword = keywords[j];
+                int keyword_len = strlen(keywords[j]);
+                if(!strncmp(&row->render[i], keyword, keyword_len) &&
+                        is_separator(row->render[i + keyword_len])) {
+                    memset(&row->hl[i], HL_KEYWORD, keyword_len);
+                    prev_char = row->render[i+keyword_len-1];
+                    i += keyword_len;
+                    break;
+                }
+            }
+        }
         prev_char = c;
         i++;
     }
@@ -312,6 +343,8 @@ int editorSyntaxToColor(int hl) {
             return 31;
         case HL_STRING:
             return 32;
+        case HL_KEYWORD:
+            return 33;
         case HL_MATCH:
             return 34;
         case HL_COMMENT:
@@ -636,7 +669,6 @@ struct abuf {
 
 void abAppend(struct abuf *ab, const char *s, int len) {
     char *new = realloc(ab->b, ab->len + len);
-
     if (new == NULL) return;
     memcpy(&new[ab->len], s, len);
     ab->b = new;
