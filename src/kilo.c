@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -78,6 +79,7 @@ struct editorConfig {
     char statusMessage[80];
     int rowoff;
     int coloff;
+    int lineno_offset;
     int numrows;
     int screenrows;
     int screencols;
@@ -414,6 +416,7 @@ int editorCxToRx(erow *row, int cx) {
         }
         rx++;
     }
+    rx += E.lineno_offset;
     return rx;
 }
 
@@ -480,6 +483,7 @@ void editorInsertRow(int at, char *s, size_t len) {
     editorUpdateRow(&E.row[at]);
 
     E.numrows++;
+    E.lineno_offset = floor (log10 (abs (E.numrows))) + 2;
     E.dirty++;
 }
 
@@ -495,6 +499,7 @@ void editorDelRow(int at) {
     memmove(&E.row[at], &E.row[at+1], sizeof(erow) * (E.numrows - at - 1));
     for (int j = at; j <= E.numrows - 1; j++) E.row[j].idx--;
     E.numrows--;
+    E.lineno_offset = floor (log10 (abs (E.numrows))) + 2;
     E.dirty++;
 }
 
@@ -757,6 +762,13 @@ void editorDrawRows(struct abuf *ab) {
             int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
+            char lineno[36];
+            int linenoLen = snprintf(lineno, sizeof(lineno), "%d",
+                    filerow + 1);
+            abAppend(ab, lineno, linenoLen);
+            int curr = floor (log10 (abs (filerow))) + 1;
+            int padding = E.lineno_offset - curr;
+            for (; padding > 0; padding--) abAppend(ab, " ", 1);
             // Syntax highlighting
             char *c = &E.row[filerow].render[E.coloff];
             unsigned char *hl = &E.row[filerow].hl[E.coloff];
@@ -789,8 +801,6 @@ void editorDrawStatusBar(struct abuf *ab) {
     int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
             E.filename ? E.filename : "[No Name]", E.numrows,
             E.dirty ? "(modified)" : "");
-//int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d",
-//    E.syntax ? E.syntax->filetype : "no ft", E.cy + 1, E.numrows);
     int fileloclen = snprintf(fileloc, sizeof(fileloc), "%s | %d,%d",
             E.syntax ? E.syntax->filetype : "no filetype", E.cy + 1, E.cx + 1);
     if (len > E.screencols) len = E.screencols;
@@ -927,7 +937,6 @@ void editorMoveCursor(int key) {
     if (row && E.cx >= row->size) {
         E.cx = row->size;
     }
-    if (E.cx < 0) E.cx = 0;
 }
 
 void editorProcessKeypress(void) {
@@ -1026,6 +1035,7 @@ void initEditor(void) {
     E.row = NULL;
     E.dirty = 0;
     E.filename = NULL;
+    E.lineno_offset = 0;
     E.statusMessage[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
