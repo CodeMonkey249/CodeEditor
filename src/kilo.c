@@ -373,11 +373,11 @@ void editorUpdateSyntax(erow *row) {
 int editorSyntaxToColor(int hl) {
     switch(hl) {
         case HL_MLCOMMENT:
-        case HL_COMMENT: return 36;
-        case HL_KEYWORD: return 33;
-        case HL_NUMBER: return 31;
-        case HL_STRING: return 32;
-        case HL_MATCH: return 34;
+        case HL_NUMBER: return 31; // red
+        case HL_STRING: return 32; // green
+        case HL_MATCH: return 34; // blue
+        case HL_KEYWORD: return 35; // purple
+        case HL_COMMENT: return 36; // cyan
         default: return 37;
     }
 }
@@ -560,8 +560,7 @@ void editorDelChar(void) {
         editorRowAppendString(&E.row[E.cy-1], E.row[E.cy].chars, E.row[E.cy].size);
         editorDelRow(E.cy);
         E.cy--;
-    }
-    else {
+    } else if (E.cx != 0 && E.cy >= 0) {
         editorRowDelChar(&E.row[E.cy], E.cx - 1);
         E.cx--;
     }
@@ -762,13 +761,16 @@ void editorDrawRows(struct abuf *ab) {
             int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
+            // Print line numbers
+            abAppend(ab, "\x1b[33m", 5); // yellow
             char lineno[36];
             int linenoLen = snprintf(lineno, sizeof(lineno), "%d",
                     filerow + 1);
             abAppend(ab, lineno, linenoLen);
-            int curr = floor (log10 (abs (filerow))) + 1;
+            int curr = floor (log10 (abs (filerow+1))) + 1;
             int padding = E.lineno_offset - curr;
             for (; padding > 0; padding--) abAppend(ab, " ", 1);
+            abAppend(ab, "\x1b[39m", 5); // normal color
             // Syntax highlighting
             char *c = &E.row[filerow].render[E.coloff];
             unsigned char *hl = &E.row[filerow].hl[E.coloff];
@@ -1035,7 +1037,7 @@ void initEditor(void) {
     E.row = NULL;
     E.dirty = 0;
     E.filename = NULL;
-    E.lineno_offset = 0;
+    E.lineno_offset = 2;
     E.statusMessage[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
