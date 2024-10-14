@@ -33,6 +33,7 @@ enum {
     END_KEY,
     PAGE_UP,
     PAGE_DOWN,
+    TAB_KEY,
 };
 
 enum editorHighlight {
@@ -170,6 +171,10 @@ int editorReadKey(void) {
     while (code != 1) {
         code = read(STDIN_FILENO, &c, 1);
         if (code == -1) die("read");
+    }
+    // Catch tab
+    if (c == '\t') {
+        return TAB_KEY;
     }
     // Catch escape sequences
     if (c == '\x1b') {
@@ -1010,6 +1015,23 @@ void editorProcessKeypress(void) {
                 // Get current row if it exists
                 if (E.cy < E.numrows)
                     E.cx = E.row[E.cy].size;
+                break;
+            }
+        case TAB_KEY:
+            {
+                // On a tab stop or at the front of a line
+                if ((E.cx + 1) % KILO_TAB_STOP == 0 || E.cx == 0) {
+                    for (int i = 0; i < 8; i++) {
+                        editorInsertChar(' ');
+                    }
+                }
+                else {
+                    int idx = E.cx;
+                    while (idx % KILO_TAB_STOP != 0) {
+                        editorInsertChar(' ');
+                        idx++;
+                    }
+                }
                 break;
             }
         case CTRL_KEY('s'):
