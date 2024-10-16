@@ -977,9 +977,7 @@ void editorProcessKeypress(void) {
                     for (int i = 0; i < KILO_TAB_STOP; i++) {
                         if (E.cx != 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
                             editorDelChar();
-                            editorSetStatusMessage("%d", E.cx);
                         } else {
-                            editorSetStatusMessage("else");
                             break;
                         }
                     }
