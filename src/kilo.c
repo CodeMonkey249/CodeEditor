@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 /*** defines ***/ 
-#define KILO_TAB_STOP 8
+#define KILO_TAB_STOP 4
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -971,7 +971,34 @@ void editorProcessKeypress(void) {
             break;
         case BACKSPACE:
         case CTRL_KEY('h'):
-            editorDelChar();
+            if (E.cx > 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                // Cursor is on a tab stop
+                if (E.cx % KILO_TAB_STOP == 0 && E.cx != 0) {
+                    for (int i = 0; i < KILO_TAB_STOP; i++) {
+                        if (E.cx != 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                            editorDelChar();
+                            editorSetStatusMessage("%d", E.cx);
+                        } else {
+                            editorSetStatusMessage("else");
+                            break;
+                        }
+                    }
+                }
+                // Cursor is not on a tab stop
+                else {
+                    int idx = E.cx;
+                    while (idx % KILO_TAB_STOP != 0) {
+                        if (E.cx != 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                            editorDelChar();
+                            idx--;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                editorDelChar();
+            }
             break;
         case DELETE_KEY:
             editorMoveCursor(ARROW_RIGHT);
@@ -1020,8 +1047,8 @@ void editorProcessKeypress(void) {
         case TAB_KEY:
             {
                 // On a tab stop or at the front of a line
-                if ((E.cx + 1) % KILO_TAB_STOP == 0 || E.cx == 0) {
-                    for (int i = 0; i < 8; i++) {
+                if (E.cx % KILO_TAB_STOP == 0 || E.cx == 0) {
+                    for (int i = 0; i < KILO_TAB_STOP; i++) {
                         editorInsertChar(' ');
                     }
                 }
