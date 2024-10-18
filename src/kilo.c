@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 /*** defines ***/ 
-#define KILO_TAB_STOP 8
+#define KILO_TAB_STOP 4
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -33,6 +33,7 @@ enum {
     END_KEY,
     PAGE_UP,
     PAGE_DOWN,
+    TAB_KEY,
 };
 
 enum editorHighlight {
@@ -67,6 +68,7 @@ typedef struct erow {
     char *render;
     unsigned char *hl;
     int hl_open_comment;
+    int indent;
 } erow;
 
 struct editorConfig {
@@ -77,6 +79,7 @@ struct editorConfig {
     int dirty;
     char *filename;
     char statusMessage[80];
+    int prev_char;
     int rowoff;
     int coloff;
     int lineno_offset;
@@ -116,6 +119,7 @@ struct editorSyntax HLDB[] = {
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen(void);
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
+void editorDelChar(void);
 
 /*** terminal ***/
 void die(const char *s) {
@@ -170,6 +174,10 @@ int editorReadKey(void) {
     while (code != 1) {
         code = read(STDIN_FILENO, &c, 1);
         if (code == -1) die("read");
+    }
+    // Catch tab
+    if (c == '\t') {
+        return TAB_KEY;
     }
     // Catch escape sequences
     if (c == '\x1b') {
@@ -434,27 +442,23 @@ int editorRxToCx(erow *row, int rx) {
 
 void editorUpdateRow(erow *row) {
     row->render = malloc(row->size + 1);
-    int i, tabs = 0;
-    // Get number of tabs in row
+    int i, leading_spaces = 0;
+    // Get leading spaces
     for (i = 0; i < row->size; i++) {
-        if (row->chars[i] == '\t') {
-            tabs++;
+        if (row->chars[i] == ' ') {
+            leading_spaces++;
+        } else {
+            break;
         }
     }
+    row->indent = leading_spaces;
     free(row->render);
-    row->render = malloc(row->size + tabs*(KILO_TAB_STOP - 1) + 1);
+    row->render = malloc(row->size + 1);
 
     // Fill render buffer
     int idx = 0;
     for(i = 0; i < row->size; i++) {
-        if (row->chars[i] == '\t') {
-            row->render[idx++] = ' ';
-            while (idx % KILO_TAB_STOP != 0) {
-                row->render[idx++] = ' ';
-            }
-        } else {
-            row->render[idx++] = row->chars[i];
-        }
+        row->render[idx++] = row->chars[i];
     }
     row->render[idx] = '\0';
     row->rsize = idx;
@@ -464,7 +468,6 @@ void editorUpdateRow(erow *row) {
 
 void editorInsertRow(int at, char *s, size_t len) {
     if (at < 0 || at > E.numrows) return;
-
     E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
     memmove(&E.row[at+1], &E.row[at], sizeof(erow) * (E.numrows - at));
     for (int j = at + 1; j <= E.numrows; j++) E.row[j].idx++;
@@ -534,6 +537,11 @@ void editorInsertChar(int c) {
     if (E.cy == E.numrows) {
         editorInsertRow(E.cy, "", 0);
     }
+    if (c == 125 && E.cx >= KILO_TAB_STOP && E.prev_char == 13) {
+        for (int i = 0; i < KILO_TAB_STOP; i++) {
+            editorDelChar();
+        }
+    }
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
 }
@@ -542,15 +550,34 @@ void editorInsertNewLine(void) {
     if (E.cx == 0) {
         editorInsertRow(E.cy, "", 0);
     } else {
-       erow *row = &E.row[E.cy];
-       editorInsertRow(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
-       row = &E.row[E.cy];
-       row->size = E.cx;
-       row->chars[row->size] = '\0';
-       editorUpdateRow(row);
+        erow *row = &E.row[E.cy];
+        // Auto indenting
+        int len = E.row[E.cy].size - E.cx;
+        char *s = malloc(E.row[E.cy].size + KILO_TAB_STOP);
+        int padding = row->indent;
+        int idx = 0;
+        for (; padding > 0; padding--) {
+            s[idx] = ' ';
+            idx++;
+            len++;
+        }
+        if (row->chars[row->size-1] == '{') {
+            for (int i = 0; i < KILO_TAB_STOP; i++) {
+                s[idx] = ' ';
+                idx++;
+                len++;
+            }
+        }
+        memcpy(&s[idx], &row->chars[E.cx], row->size - E.cx);
+        editorInsertRow(E.cy + 1, s, len);
+        row = &E.row[E.cy];
+        row->size = E.cx;
+        row->chars[row->size] = '\0';
+        editorUpdateRow(row);
+        free(s);
     }
     E.cy++;
-    E.cx = 0;
+    E.cx = E.row[E.cy].indent;
 }
 
 void editorDelChar(void) {
@@ -966,7 +993,32 @@ void editorProcessKeypress(void) {
             break;
         case BACKSPACE:
         case CTRL_KEY('h'):
-            editorDelChar();
+            if (E.cx > 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                // Cursor is on a tab stop
+                if (E.cx % KILO_TAB_STOP == 0 && E.cx != 0) {
+                    for (int i = 0; i < KILO_TAB_STOP; i++) {
+                        if (E.cx != 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                            editorDelChar();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                // Cursor is not on a tab stop
+                else {
+                    int idx = E.cx;
+                    while (idx % KILO_TAB_STOP != 0) {
+                        if (E.cx != 0 && E.row[E.cy].chars[E.cx-1] == ' ') {
+                            editorDelChar();
+                            idx--;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                editorDelChar();
+            }
             break;
         case DELETE_KEY:
             editorMoveCursor(ARROW_RIGHT);
@@ -1012,6 +1064,23 @@ void editorProcessKeypress(void) {
                     E.cx = E.row[E.cy].size;
                 break;
             }
+        case TAB_KEY:
+            {
+                // On a tab stop or at the front of a line
+                if (E.cx % KILO_TAB_STOP == 0 || E.cx == 0) {
+                    for (int i = 0; i < KILO_TAB_STOP; i++) {
+                        editorInsertChar(' ');
+                    }
+                }
+                else {
+                    int idx = E.cx;
+                    while (idx % KILO_TAB_STOP != 0) {
+                        editorInsertChar(' ');
+                        idx++;
+                    }
+                }
+                break;
+            }
         case CTRL_KEY('s'):
             editorSave();
             break;
@@ -1022,6 +1091,7 @@ void editorProcessKeypress(void) {
             editorInsertChar(c);
             break;
     }
+    E.prev_char = c;
     quit_confirm = 1;
 }
 
@@ -1037,6 +1107,7 @@ void initEditor(void) {
     E.row = NULL;
     E.dirty = 0;
     E.filename = NULL;
+    E.prev_char = ' ';
     E.lineno_offset = 2;
     E.statusMessage[0] = '\0';
     E.statusmsg_time = 0;
