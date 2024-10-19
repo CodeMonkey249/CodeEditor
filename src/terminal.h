@@ -47,6 +47,7 @@ struct editorConfig {
     erow *row;
     int dirty;
     char *filename;
+    char *copy_buffer;
     char statusMessage[80];
     int prev_char;
     int rowoff;

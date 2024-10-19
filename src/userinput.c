@@ -120,6 +120,12 @@ void editorProcessKeypress(void) {
             exit(0);
             break;
             // Navigation mapping
+        case CTRL_KEY('c'):
+            // Copy
+            break;
+        case CTRL_KEY('v'):
+            // Paste
+            break;
         case CTRL_KEY('f'):
             editorFind();
             break;

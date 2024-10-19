@@ -34,6 +34,7 @@ void initEditor(void) {
     E.row = NULL;
     E.dirty = 0;
     E.filename = NULL;
+    E.copy_buffer = NULL;
     E.prev_char = ' ';
     E.lineno_offset = 2;
     E.statusMessage[0] = '\0';
