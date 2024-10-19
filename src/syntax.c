@@ -13,6 +13,7 @@
 
 #include "terminal.h"
 #include "syntax.h"
+#include "userinput.h"
 
 /*** filetypes ***/
 char *C_HL_EXTENSIONS[] = {".c", ".cpp", ".h", NULL};

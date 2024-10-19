@@ -40,6 +40,10 @@ void initEditor(void) {
     E.statusMessage[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
+    E.select_end_x = 0;
+    E.select_end_y = 0;
+    E.select_start_x = 0;
+    E.select_start_y = 0;
     int code = getWindowSize(&E.screenrows, &E.screencols);
     if (code == -1) die("getWindowSize");
     E.screenrows -= 2;

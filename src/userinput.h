@@ -7,4 +7,8 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int));
 
 void editorProcessKeypress(void);
 
+void editorStartSelecting(void);
+
+int editorIsSelecting(void);
+
 #endif

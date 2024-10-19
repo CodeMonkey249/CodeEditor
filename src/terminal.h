@@ -28,6 +28,10 @@ enum keyboardOperations {
     PAGE_UP,
     PAGE_DOWN,
     TAB_KEY,
+    SELECT_UP,
+    SELECT_DOWN,
+    SELECT_RIGHT,
+    SELECT_LEFT,
 };
 
 enum editorHighlight {
@@ -38,6 +42,7 @@ enum editorHighlight {
     HL_STRING,
     HL_NUMBER,
     HL_MATCH,
+    HL_SELECT,
 };
 
 struct editorConfig {
@@ -57,6 +62,10 @@ struct editorConfig {
     int screenrows;
     int screencols;
     time_t statusmsg_time;
+    int select_start_x;
+    int select_start_y;
+    int select_end_x;
+    int select_end_y;
     struct editorSyntax *syntax;
     struct termios orig_termios;
 };

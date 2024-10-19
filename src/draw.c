@@ -1,6 +1,7 @@
 #include "syntax.h"
 #include "draw.h"
 #include "editor_ops.h"
+#include "userinput.h"
 
 /*** append buffer ***/
 void abAppend(struct abuf *ab, const char *s, int len) {
@@ -75,8 +76,17 @@ void editorDrawRows(struct abuf *ab) {
             char *c = &E.row[filerow].render[E.coloff];
             unsigned char *hl = &E.row[filerow].hl[E.coloff];
             for (int i = 0; i < len; i++) {
+                if (((filerow >= E.select_start_y && filerow <= E.select_end_y)
+                        || (filerow <= E.select_start_y && filerow >= E.select_end_y))
+                    && ((i >= E.select_start_x && i < E.select_end_x)
+                        || (i <= E.select_start_x && i > E.select_end_x))
+                    && editorIsSelecting()) {
+                    // Invert colors
+                    // TODO: does this invert the entire line?
+                    abAppend(ab, "\x1b[7m", 4);
+                }
+
                 if (hl[i] == HL_NORMAL) {
-                    abAppend(ab, "\x1b[39m", 5);
                     abAppend(ab, &c[i], 1);
                 } else {
                     int color = editorSyntaxToColor(hl[i]);
@@ -86,6 +96,7 @@ void editorDrawRows(struct abuf *ab) {
                     abAppend(ab, &c[i], 1);
                     abAppend(ab, "\x1b[39m", 5);
                 }
+                abAppend(ab, "\x1b[m", 3);
             }
             abAppend(ab, "\x1b[39m", 5);
         }
@@ -95,8 +106,8 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorDrawStatusBar(struct abuf *ab) {
-    abAppend(ab, "\x1b[7m", 4);
     // Invert colors
+    abAppend(ab, "\x1b[7m", 4);
     char status[80];
     char fileloc[80];
     // Display filename if there is one

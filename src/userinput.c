@@ -18,6 +18,21 @@ int editorReadKey(void) {
     if (c == '\t') {
         return TAB_KEY;
     }
+    // Character selection
+    // TODO: this causes latency for the 2 key. Because the editor is waiting
+    //  for a possible second input, the 2 can't be drawn until the key is
+    //  unpressed, rather than drawing the character on keydown. There should
+    //  be a better solution.
+    if (c == '2') {
+        if (read(STDIN_FILENO, &c, 1) != 1) return '2';
+        switch (c) {
+            case 'A': return SELECT_UP;
+            case 'B': return SELECT_DOWN;
+            case 'C': return SELECT_RIGHT;
+            case 'D': return SELECT_LEFT;
+        }
+    }
+
     // Catch escape sequences
     if (c == '\x1b') {
         char seq[3];
@@ -103,9 +118,25 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
     }
 }
 
+void editorStartSelecting(void) {
+    E.select_start_x = E.cx;
+    E.select_start_y = E.cy;
+    // TODO: highlighting!
+}
+
+int editorIsSelecting(void) {
+    if (E.select_start_x == E.select_end_x && E.select_start_y == E.select_end_y) {
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
 void editorProcessKeypress(void) {
     static int quit_confirm = 1;
     int c = editorReadKey();
+    editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
     switch(c) {
         // Quit on CTRL-q
         case CTRL_KEY('q'):
@@ -121,9 +152,11 @@ void editorProcessKeypress(void) {
             break;
             // Navigation mapping
         case CTRL_KEY('c'):
+            // editorSetStatusMessage("Copy: %d", CTRL_KEY('c'));
             // Copy
             break;
         case CTRL_KEY('v'):
+            // editorSetStatusMessage("Paste");
             // Paste
             break;
         case CTRL_KEY('f'):
@@ -222,6 +255,30 @@ void editorProcessKeypress(void) {
                 }
                 break;
             }
+        case SELECT_UP:
+            if (!editorIsSelecting()) editorStartSelecting();
+            editorMoveCursor(ARROW_UP);
+            E.select_end_x = E.cx;
+            E.select_end_y = E.cy;
+            break;
+        case SELECT_DOWN:
+            if (!editorIsSelecting()) editorStartSelecting();
+            editorMoveCursor(ARROW_DOWN);
+            E.select_end_x = E.cx;
+            E.select_end_y = E.cy;
+            break;
+        case SELECT_RIGHT:
+            if (!editorIsSelecting()) editorStartSelecting();
+            editorMoveCursor(ARROW_RIGHT);
+            E.select_end_x = E.cx;
+            E.select_end_y = E.cy;
+            break;
+        case SELECT_LEFT:
+            if (!editorIsSelecting()) editorStartSelecting();
+            editorMoveCursor(ARROW_LEFT);
+            E.select_end_x = E.cx;
+            E.select_end_y = E.cy;
+            break;
         case CTRL_KEY('s'):
             editorSave();
             break;
