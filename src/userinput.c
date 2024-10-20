@@ -136,7 +136,7 @@ int editorIsSelecting(void) {
 void editorProcessKeypress(void) {
     static int quit_confirm = 1;
     int c = editorReadKey();
-    editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
+    // editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
     switch(c) {
         // Quit on CTRL-q
         case CTRL_KEY('q'):
@@ -256,26 +256,15 @@ void editorProcessKeypress(void) {
                 break;
             }
         case SELECT_UP:
-            if (!editorIsSelecting()) editorStartSelecting();
-            editorMoveCursor(ARROW_UP);
-            E.select_end_x = E.cx;
-            E.select_end_y = E.cy;
-            break;
         case SELECT_DOWN:
-            if (!editorIsSelecting()) editorStartSelecting();
-            editorMoveCursor(ARROW_DOWN);
-            E.select_end_x = E.cx;
-            E.select_end_y = E.cy;
-            break;
         case SELECT_RIGHT:
-            if (!editorIsSelecting()) editorStartSelecting();
-            editorMoveCursor(ARROW_RIGHT);
-            E.select_end_x = E.cx;
-            E.select_end_y = E.cy;
-            break;
         case SELECT_LEFT:
             if (!editorIsSelecting()) editorStartSelecting();
-            editorMoveCursor(ARROW_LEFT);
+            // if (E.cx > E.select_end_x
+            if (c == SELECT_UP) editorMoveCursor(ARROW_UP);
+            if (c == SELECT_DOWN) editorMoveCursor(ARROW_DOWN);
+            if (c == SELECT_RIGHT) editorMoveCursor(ARROW_RIGHT);
+            if (c == SELECT_LEFT) editorMoveCursor(ARROW_LEFT);
             E.select_end_x = E.cx;
             E.select_end_y = E.cy;
             break;

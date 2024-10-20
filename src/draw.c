@@ -82,7 +82,6 @@ void editorDrawRows(struct abuf *ab) {
                         || (i <= E.select_start_x && i > E.select_end_x))
                     && editorIsSelecting()) {
                     // Invert colors
-                    // TODO: does this invert the entire line?
                     abAppend(ab, "\x1b[7m", 4);
                 }
 
