@@ -38,6 +38,7 @@ void editorScroll(void) {
 }
 
 void editorDrawRows(struct abuf *ab) {
+    int inSelectionZone = 0;
     for (int y = 0; y < E.screenrows; y++) {
         // Clear this row
         int filerow = y + E.rowoff;
@@ -76,14 +77,8 @@ void editorDrawRows(struct abuf *ab) {
             char *c = &E.row[filerow].render[E.coloff];
             unsigned char *hl = &E.row[filerow].hl[E.coloff];
             for (int i = 0; i < len; i++) {
-                if (((filerow >= E.select_start_y && filerow <= E.select_end_y)
-                        || (filerow <= E.select_start_y && filerow >= E.select_end_y))
-                    && ((i >= E.select_start_x && i < E.select_end_x)
-                        || (i <= E.select_start_x && i > E.select_end_x))
-                    && editorIsSelecting()) {
-                    // Invert colors
-                    abAppend(ab, "\x1b[7m", 4);
-                }
+                // Code Selection
+                if (isInSelection(i, filerow)) abAppend(ab, "\x1b[7m", 4);
 
                 if (hl[i] == HL_NORMAL) {
                     abAppend(ab, &c[i], 1);

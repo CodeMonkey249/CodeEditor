@@ -11,4 +11,6 @@ void editorStartSelecting(void);
 
 int editorIsSelecting(void);
 
+int isInSelection(int x, int y);
+
 #endif

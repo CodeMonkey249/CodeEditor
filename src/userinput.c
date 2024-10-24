@@ -133,10 +133,52 @@ int editorIsSelecting(void) {
     }
 }
 
+int isInSelection(int x, int y) {
+    if (!editorIsSelecting()) return 0;
+
+    // Up
+    if (E.select_start_y > E.select_end_y) {
+        // top line
+        if (y == E.select_end_y && x > E.select_end_x) {
+            return 1;
+        // bottom line
+        } else if (y == E.select_start_y && x <= E.select_start_x) {
+            return 1;
+        // between
+        } else if (y < E.select_start_y && y > E.select_end_y) {
+            return 1;
+        }
+    // Down
+    } else if (E.select_start_y < E.select_end_y) {
+        // top line
+        if (y == E.select_start_y && x >= E.select_start_x) {
+            return 1;
+        // bottom line
+        } else if (y == E.select_end_y && x < E.select_end_x) {
+            return 1;
+        // between
+        } else if (y > E.select_start_y && y < E.select_end_y) {
+            return 1;
+        }
+    // Same Line
+    } else if (E.select_start_y == E.select_end_y) {
+        if (y == E.select_start_y) {
+            // before
+            if (x >= E.select_start_x && x < E.select_end_x) {
+                return 1;
+            // after
+            } else if (x <= E.select_start_x && x > E.select_end_x) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 void editorProcessKeypress(void) {
     static int quit_confirm = 1;
     int c = editorReadKey();
-    // editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
     switch(c) {
         // Quit on CTRL-q
         case CTRL_KEY('q'):
@@ -259,14 +301,20 @@ void editorProcessKeypress(void) {
         case SELECT_DOWN:
         case SELECT_RIGHT:
         case SELECT_LEFT:
-            if (!editorIsSelecting()) editorStartSelecting();
-            // if (E.cx > E.select_end_x
+            if (!editorIsSelecting()) {
+                editorStartSelecting();
+            } else if (E.cx != E.select_end_x || E.cy != E.select_end_y) {
+                // E.select_end_x = E.cx;
+                // E.select_end_y = E.cy;
+                editorStartSelecting();
+            }
             if (c == SELECT_UP) editorMoveCursor(ARROW_UP);
             if (c == SELECT_DOWN) editorMoveCursor(ARROW_DOWN);
             if (c == SELECT_RIGHT) editorMoveCursor(ARROW_RIGHT);
             if (c == SELECT_LEFT) editorMoveCursor(ARROW_LEFT);
             E.select_end_x = E.cx;
             E.select_end_y = E.cy;
+            editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
             break;
         case CTRL_KEY('s'):
             editorSave();
