@@ -304,8 +304,6 @@ void editorProcessKeypress(void) {
             if (!editorIsSelecting()) {
                 editorStartSelecting();
             } else if (E.cx != E.select_end_x || E.cy != E.select_end_y) {
-                // E.select_end_x = E.cx;
-                // E.select_end_y = E.cy;
                 editorStartSelecting();
             }
             if (c == SELECT_UP) editorMoveCursor(ARROW_UP);
@@ -314,7 +312,6 @@ void editorProcessKeypress(void) {
             if (c == SELECT_LEFT) editorMoveCursor(ARROW_LEFT);
             E.select_end_x = E.cx;
             E.select_end_y = E.cy;
-            editorSetStatusMessage("x: %d-%d, y: %d-%d", E.select_start_x, E.select_end_x, E.select_start_y, E.select_end_y);
             break;
         case CTRL_KEY('s'):
             editorSave();
