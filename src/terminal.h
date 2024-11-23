@@ -49,6 +49,7 @@ struct editorConfig {
     int cx;
     int cy;
     int rx;
+    int cursor_pos;
     erow *row;
     int dirty;
     char *filename;
