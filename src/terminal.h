@@ -53,6 +53,7 @@ struct editorConfig {
     int dirty;
     char *filename;
     char *copy_buffer;
+    int copy_buffer_len;
     char statusMessage[80];
     int prev_char;
     int rowoff;

@@ -2,21 +2,9 @@
 
 #include "terminal.h"
 #include "draw.h"
+#include "editor_ops.h"
 
 void copy(void) {
-
-    // Is end_y < start_y
-    //  move = -1
-    // Is end_y > start_y
-    //  move = 1
-    // Is end_y == start_y
-    //  Is end_x < start_x
-    //   move = -1
-    //  Is end_x > start_x
-    //   move = 1
-    //  Is end_x == start_x
-    //   move = 0
-
     int move;
     if (E.select_end_y < E.select_start_y) {
         move = -1;
@@ -49,8 +37,6 @@ void copy(void) {
     E.copy_buffer_len = 1;
 
     int idx = 0;
-    int potato = 0;
-
     while(move && !(x == x_end && y == y_end)) {
         if (idx >= E.copy_buffer_len) {
             E.copy_buffer_len *= 2;
@@ -71,4 +57,21 @@ void copy(void) {
     E.copy_buffer[E.copy_buffer_len] = '\0';
 
     editorSetStatusMessage("%d characters copied", E.copy_buffer_len);
+    E.select_start_x = E.select_end_x;
+    E.select_start_y = E.select_end_y;
+}
+
+void paste(void) {
+    if (!E.copy_buffer) return;
+    for (int i = 0; i < E.copy_buffer_len; i++) {
+        if (E.copy_buffer[i] == '\n') {
+            editorInsertNewLine();
+        } else if (E.copy_buffer[i] == '\0') {
+            break;
+        } else {
+            editorInsertChar(E.copy_buffer[i]);
+        }
+    }
+
+    editorSetStatusMessage("%d characters pasted", E.copy_buffer_len);
 }

@@ -6,6 +6,7 @@
 #include "terminal.h"
 #include "draw.h"
 #include "fileio.h"
+#include "copypaste.h"
 
 int editorReadKey(void) {
     int code = 0;
@@ -14,36 +15,35 @@ int editorReadKey(void) {
         code = read(STDIN_FILENO, &c, 1);
         if (code == -1) die("read");
     }
-    // Catch tab
+    // Tab
     if (c == '\t') {
         return TAB_KEY;
     }
-    // Character selection
-    // TODO: this causes latency for the 2 key. Because the editor is waiting
-    //  for a possible second input, the 2 can't be drawn until the key is
-    //  unpressed, rather than drawing the character on keydown. There should
-    //  be a better solution.
-    if (c == '2') {
-        if (read(STDIN_FILENO, &c, 1) != 1) return '2';
-        switch (c) {
-            case 'A': return SELECT_UP;
-            case 'B': return SELECT_DOWN;
-            case 'C': return SELECT_RIGHT;
-            case 'D': return SELECT_LEFT;
-        }
-    }
 
-    // Catch escape sequences
+    // Escape Sequences
     if (c == '\x1b') {
-        char seq[3];
-
+        char seq[5];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
-
         if(seq[0] == '[') {
-            // PAGE/HOME/END
             if (seq[1] >= '0' && seq[1] <= '9') {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
+                editorSetStatusMessage("%d,%d,%d", seq[0], seq[1], seq[2]);
+                // Text Selection (SHIFT+ARROWS)
+                //   <esc>[1;2<ABCD>
+                if (seq[1] == '1' && seq[2] == ';') {
+                    if (read(STDIN_FILENO, &seq[3], 1) != 1) return '\x1b';
+                    if (seq[3] == '2') {
+                        if (read(STDIN_FILENO, &seq[4], 1) != 1) return '\x1b';
+                        switch(seq[4]) {
+                            case 'A': return SELECT_UP;
+                            case 'B': return SELECT_DOWN;
+                            case 'C': return SELECT_RIGHT;
+                            case 'D': return SELECT_LEFT;
+                        }
+                    }
+                }
+                // PAGE/HOME/END
                 if (seq[2] == '~') {
                     switch (seq[1]) {
                         case '1': return HOME_KEY;
@@ -56,8 +56,8 @@ int editorReadKey(void) {
                     }
                 }
             } else {
+                // Arrow keys
                 switch(seq[1]) {
-                    // Arrow keys
                     case 'A': return ARROW_UP;
                     case 'B': return ARROW_DOWN;
                     case 'C': return ARROW_RIGHT;
@@ -66,7 +66,7 @@ int editorReadKey(void) {
                     case 'F': return END_KEY;
                 }
             }
-        } else if (seq[0] == 'O') {  
+        } else if (seq[0] == 'O') {
             switch(seq[1]) {
                 case 'H': return HOME_KEY;
                 case 'F': return END_KEY;
@@ -179,6 +179,7 @@ int isInSelection(int x, int y) {
 void editorProcessKeypress(void) {
     static int quit_confirm = 1;
     int c = editorReadKey();
+    //editorSetStatusMessage("%d", E.prev_char);
     switch(c) {
         // Quit on CTRL-q
         case CTRL_KEY('q'):
@@ -194,12 +195,10 @@ void editorProcessKeypress(void) {
             break;
             // Navigation mapping
         case CTRL_KEY('c'):
-            // editorSetStatusMessage("Copy: %d", CTRL_KEY('c'));
-            // Copy
+            copy();
             break;
         case CTRL_KEY('v'):
-            // editorSetStatusMessage("Paste");
-            // Paste
+            paste();
             break;
         case CTRL_KEY('f'):
             editorFind();
@@ -318,6 +317,9 @@ void editorProcessKeypress(void) {
             break;
         case CTRL_KEY('l'):
         case '\x1b':
+            E.select_start_x = E.select_end_x;
+            E.select_start_y = E.select_end_y;
+            //editorSetStatusMessage("ESC char");
             break;
         default:
             editorInsertChar(c);
