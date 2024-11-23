@@ -271,12 +271,14 @@ void editorProcessKeypress(void) {
             }
         case HOME_KEY:
             E.cx = 0;
+            E.cursor_pos = E.cx;
             break;
         case END_KEY:
             {
                 // Get current row if it exists
                 if (E.cy < E.numrows)
                     E.cx = E.row[E.cy].size;
+                E.cursor_pos = E.cx;
                 break;
             }
         case TAB_KEY:

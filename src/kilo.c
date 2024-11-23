@@ -29,6 +29,7 @@ void initEditor(void) {
     E.cx = 0;
     E.cy = 0;
     E.rx = 0;
+    E.cursor_pos = 0;
     E.rowoff = 0;
     E.coloff = 0;
     E.row = NULL;

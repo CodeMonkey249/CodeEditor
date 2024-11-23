@@ -131,6 +131,7 @@ void editorInsertChar(int c) {
     }
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
+    E.cursor_pos = E.cx;
 }
 
 void editorInsertNewLine(void) {
@@ -252,6 +253,7 @@ void editorMoveCursor(int key) {
             if (E.cx > 0) {
                 E.cx--;
             }
+            E.cursor_pos = E.cx;
             break;
         case ARROW_DOWN:
             if (E.cy < (E.numrows - 1)) {
@@ -262,14 +264,17 @@ void editorMoveCursor(int key) {
             if (row && E.cx < row->size) {
                 E.cx++;
             }
+            E.cursor_pos = E.cx;
             break;
     }
 
     // Snap cursor to end of line
     row = NULL;
     if (E.cy < E.numrows) row = &E.row[E.cy];
-    if (row && E.cx >= row->size) {
+    if (row && (E.cx >= row->size || E.cursor_pos >= row->size)) {
         E.cx = row->size;
+    } else {
+        E.cx = E.cursor_pos;
     }
 }
 
